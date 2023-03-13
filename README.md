@@ -1,5 +1,5 @@
 # Feedback-Innate-exp
-# Here are the data and R scripts of the manuscript titletled "Dissecting host-microbiome interaction effects on phytoplankton microbiome composition and diversity", Jinny W Yang and Vincent J Denef
+## Here are the data and R scripts of the manuscript titletled "Dissecting host-microbiome interaction effects on phytoplankton microbiome composition and diversity", Jinny W Yang and Vincent J Denef
 
 R scripts and description of this manuscript is in "R scripts.Rmd" and "Functions.R"
 The ASV table for the main experiment is "Final_table_dada2.tsv"
