@@ -35,14 +35,13 @@ library(dplyr)
 library(quantreg)
 library(ggplot2)
 library(lme4)
-#source("/Users/jinnyyang/Feedback-Innate-exp/Functions.R")
 source("Functions.R")
 
 ```
 
 ### file input
 ```{r, echo = FALSE, message = FALSE, include = FALSE}
-Table_old=read.table("Final_table_dada2.tsv",header=T, row.names = 1) ### ASV table
+Table=read.table("Final_table_dada2.tsv",header=T, row.names = 1) ### ASV table
 Meta=read.csv("MetaData.csv",header=T, row.names = 1) ###Meta data
 Taxonomy=read.csv("Taxonomy.csv",header=T, row.names = 1) ###taxonomy data
 ```
@@ -51,13 +50,9 @@ Taxonomy=read.csv("Taxonomy.csv",header=T, row.names = 1) ###taxonomy data
 ### ASV table cleaning, removed 0 ASV and community with <2000 reads and matching ASV with taxonomy data, and the corresponding Metatdata
 ```{r, echo = FALSE, message = FALSE, include = FALSE}
 Table_old=Table_old[row.names(Table_old) %in% rownames(Taxonomy[which(Taxonomy$D1!="NA"),]),] ##remove Bacteria-unclassified
-CE1_Only_NoInitial=Table_old[,which(sapply(strsplit(colnames(Table_old), "H" , fixed = TRUE), "[", 1)=="CE1")]
-CE1_Only=data.frame(CE1_Only_NoInitial,Table_old$CE1XenicR1,Table_old$CE1XenicR2)
-colnames(CE1_Only)=c(colnames(CE1_Only_NoInitial),"CE1XenicR1","CE1XenicR2")
-CE1_Only=filter(CE1_Only,rowSums(CE1_Only)!=0) ##Remove ASV is zero in all samples
-write.csv(colSums(CE1_Only),"CE1_Only_AlgaeASVremoved_SampleReads#.csv")
-
-CE1_Only=CE1_Only[,which(colSums(CE1_Only)>=2000)]##Community with <2000 reads
+Table=filter(Table,rowSums(Table)!=0) ##Remove ASV is zero in all samples
+write.csv(colSums(Table),"Table_SampleReads#.csv")
+Table=Table[,which(colSums(Table)>=2000)] ##remove community with <2000 reads
 
 ###Filter Metadata based on the filtered ASV table
 Hratio=numeric()
