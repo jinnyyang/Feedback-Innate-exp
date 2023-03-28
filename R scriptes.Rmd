@@ -1,54 +1,47 @@
 ---
-title: "R scripts for Feedback-innate manipulation exp."
+title: "Dissecting host-microbiome interaction effects on phytoplankton microbiome composition and diversity"
 author: "Jinny Wu Yang"
 date: "2023-03-09"
-output:
-  pdf_document: default
-  html_document: default
-  code_folding: show
+output: html_document
 ---
-```{r setup, include=FALSE}
+
+### Set the Global Knitr Options
+```{r knitr_global_options, eval = TRUE, echo = TRUE}
+# Set the global options
 knitr::opts_chunk$set(eval = TRUE, 
                       echo = TRUE, 
-                      cache = TRUE,
-                      include = TRUE,
-                      collapse = FALSE,
-                      dependson = NULL,
                       warning = FALSE,
-                      engine = "R", # Chunks will always have R code, unless noted
-                      error = TRUE,
-                      fig.path="Figures/",  # Set the figure options
+                      message= FALSE,
+                      fig.path="Figures/",
                       fig.align = "center")
+# Set the seed
+set.seed(49856)
 ```
 
 
-## Preparation
-### Package 
-Packages and functions loading.
-```{r load-libraries, echo = FALSE, message = FALSE, include = FALSE}
-library(ggpubr)
-library(phyloseq)
-library(stats)
-library(vegan)
-library(ape)
-library(dplyr)
-library(quantreg)
-library(ggplot2)
-library(lme4)
+### Load in R-Packages and Set the Working Environment
+```{r load libraries and packages}
+# Load packages
+necessary_packages=c("ggpubr","phyloseq","stats","vegan","ape","dplyr","quantreg","ggplot2","lme4")
+packages = lapply(necessary_packages, library, character.only = TRUE)
+
+# Set the working Directory
+setwd("~/Feedback-Innate-exp")
+
+### Source written functions in the file Functions.R that is housed within the "Feedback-Innate-exp"
 source("Functions.R")
-
 ```
 
-### file input
-```{r, echo = FALSE, message = FALSE, include = FALSE}
+### Import Data 
+```{r data import}
 RawTable=read.table("Final_table_dada2.tsv",header=T, row.names = 1) ### ASV table
 Meta=read.csv("MetaData.csv",header=T, row.names = 1) ###Meta data
 Taxonomy=read.csv("Taxonomy.csv",header=T, row.names = 1) ###taxonomy data
 ```
 
 
-### ASV table cleaning, removed 0 ASV and community with <2000 reads and matching ASV with taxonomy data, and the corresponding Metatdata
-```{r, echo = FALSE, message = FALSE, include = FALSE}
+### Removed 0 ASV and community with <2000 reads and matching ASV with taxonomy data and  Metatdata
+```{r cleaning ASV table}
 Table=RawTable[row.names(RawTable) %in% rownames(Taxonomy[which(Taxonomy$D1!="NA"),]),] ##remove Bacteria-unclassified
 Table=filter(Table,rowSums(Table)!=0) ##Remove ASV is zero in all samples
 write.csv(colSums(Table),"Table_SampleReads#.csv")
@@ -70,9 +63,9 @@ rownames(Filtered_Meta)=Name
 ```
 
 
-## Microbiome community composition (Ordination analysis) 
+## Impacts on microbiome composition (Ordination analysis) 
 ### Calculate distance matrix and PCoA
-```{r, echo = FALSE, message = FALSE, include = FALSE}
+```{r PCoA}
 BC_dist = avgdist(t(Table), 2000,  dmethod = "bray") ## calculate Bray-Curtis distance matrix
 BC_dist_matrix=as.matrix(BC_dist, labels=TRUE)
 PCOA = pcoa(BC_dist, correction = "cailliez") ## calculate PCoA, correction added in case of negative eigenvalues
@@ -87,13 +80,12 @@ MyData=data.frame(PCOA$vectors[,1],PCOA$vectors[,2],Day,H)
 ```
 
 ### Figure 2 plotting
-```{r , echo = TRUE, message = FALSE, include = FALSE}
+```{r plot Figure 2}
 par(mfrow = c(2,3)) # 2-by-3 grid of plots
 par(oma = c(3, 3, 1, 1)) # make room for the overall x and y axis titles
 par(mar = c(0, 0, 0, 0)) # make the plots be closer together
 
 PermanovaTable=list()
-
 OrdinationEachDay(MyData,2)
 PermanovaTable[[1]]=PERMANOVAandANOSIM(Table,Filtered_Meta,2)
 
@@ -152,26 +144,25 @@ mtext("Axis PCoA 2 (14.1%)", side = 2, outer = TRUE, line = 1.4, cex=0.8)
 
 
 ### Table S1 Premanova analysis 
-```{r, echo = FALSE, message = FALSE, include = FALSE}
+```{r Table S1}
 PERMANOVA=matrix(0,6,5)
 for (i in 1:6){
   PERMANOVA[i,]=as.numeric(PermanovaTable[[i]][1,])
 }
 colnames(PERMANOVA)=colnames(PermanovaTable[[i]][1,])
 rownames(PERMANOVA)=c("Day 2", "Day 4", "Day 6", "Day 8","Day 10","Day 12")
-write.csv(Table,"PERMANOVA.csv")
+write.csv(PERMANOVA,"PERMANOVA.csv")
 ```
 
 
-## Microbiome diversty
-
-### Calcualting diveristy indeices (richness, evenness and Shannon)
-```{r, echo = FALSE, message = FALSE, include = FALSE}
+## Impacts on Microbiome diversty
+### Calcualting diveristy indices (richness, evenness and Shannon)
+```{r diversity indices}
 ps.rarefied = rarefy_even_depth(otu_table(t(Table),taxa_are_rows=F), rngseed=1, sample.size=2000, replace=T)
 Table_rarefied=t(ps.rarefied)
 Sample_all=colnames(Table_rarefied)
 Table=Table_rarefied[,which(sapply(strsplit(Sample_all, "H" , fixed = TRUE), "[", 1)=="CE1")]
-##########################
+
 Richness=colSums(ifelse(Table> 1,1,0))
 Shannon=diversity(t(Table),"shannon")
 Simpson=diversity(t(Table),"simpson")
@@ -182,13 +173,12 @@ H=sapply(strsplit(sapply(strsplit(names(Richness), "H" , fixed = TRUE), "[", 2),
 MyData=data.frame(Richness,Shannon,Simpson,Evenness,Day,H)
 ```
 ### Figure 3
-```{r, message = FALSE, include = FALSE}
-#####Diversity plot###
+```{r plot Figure 3}
 #D=1, Richness
 #D=2, Shannon
 #D=3, Simpson
 #D=4, Evenness
-par(mfrow = c(3,2)) # 3-by-6 grid of plots
+par(mfrow = c(3,2)) # 3-by-2 grid of plots
 par(oma = c(4, 4, 2, 1)) # make room for the overall x and y axis titles
 par(mar = c(0, 0, 0, 0)) # make the plots be closer together
 Label=c("(a)","(b)","(c)","(d)","(e)","(f)")
@@ -314,8 +304,7 @@ mtext("Day 10", side = 3, outer = TRUE, line = 0, cex=0.8, at=0.25, font=1)
 mtext("Day 12", side = 3, outer = TRUE, line = 0, cex=0.8, at=0.75, font=1)
 ```
 
-## Correlation and RAD
-
+## Correlation and Rank abundance distribution (RAD)
 ### This can be modified and remove
 ```{r, echo = FALSE, message = FALSE, include = FALSE}
 #########Rarefaction######
@@ -328,9 +317,9 @@ Sample=colnames(Table)
 ```
 
 ###Data organization
-```{r, echo = FALSE, message = FALSE, include = FALSE}
+```{r organize data}
 ##Prepare cor data
-ASVreaction= data.frame(matrix(ncol = 3, nrow = nrow(Table)))
+ASVreaction = data.frame(matrix(ncol = 3, nrow = nrow(Table)))
 Table[apply(Table!=0, 1, all),]
 for (i in 1:nrow(Table)){
   ASV=Table[i,]
@@ -367,7 +356,7 @@ colnames(DATA)=c("Cor","P-value","SUM","H0Mean","H5Mean","H25Mean","H50Mean","H7
 
 
 ###Matching taxonomy data
-```{r, echo = FALSE, message = FALSE, include = FALSE}
+```{r match/align taxonomy data}
 ##Let match Taxonomy!
 MM=data.frame(matrix(nrow=nrow(DATA),ncol=ncol(Taxonomy)))
 for (i in 1: nrow(DATA)){
@@ -397,9 +386,8 @@ c(min(log(ALL$SUM)+0.01/1.5),
   max(log(ALL$SUM)+0.01/1.5))
 ```
 
-
 ###Plot Figure4A: Correlation coefficietn
-```{r message = FALSE, include = FALSE}
+```{r plot Figure 4A}
 NAME=sapply(strsplit(ALL$Order, "__" , fixed = TRUE), "[", 2)
 Data=data.frame(ALL$Cor,NAME,ALL$P.value,COLOR,log(ALL$SUM)+0.01/1.5)
 Data$NAME[which(is.na(Data$NAME))]="Unclassified"
@@ -418,7 +406,7 @@ P1=ggplot(data=Data,aes(y=NAME, x=ALL.Cor, horizontal=TRUE) )+
 ```
 
 ###Plote Figure 4B: Rank abundanct distribution
-```{r}
+```{r Plot Fiugre 4B}
 RADplotwithCor=function(N,i){
   ggplot(data=N, aes(x=factor(rownames(N), level = rownames(N)), y=N[,i],fill=COLOR)) +
     geom_bar(stat = "identity",width = 0.912) + 
@@ -477,7 +465,7 @@ p6=RADplotwithCor(N,which(colnames(N)=="H100Mean"))
 ```
 
 ### Combine into Figure 4 
-```{r echo=FALSE}
+```{r plot Fiugre 4}
 
 P2=ggarrange(p1,p2,p3,p12,p5,p6,nrow = 6,
           labels = c("0%","5%","25%","50%","75%","100%"),
@@ -496,11 +484,9 @@ figure12
 
 ```
 
-
-
 ## Sumpplemenotry figures 
 ###Figure S1: Microbiome detachment experiment
-```{r echo=FALSE}
+```{r Figure S1}
 #No treatment
 aP1_A=46
 aP2_A=134
@@ -661,7 +647,7 @@ text(2,95,paste("Mean =", format(mean(T30sx2), digits = 3)),cex=0.8)
 text(3,66,paste("Mean =", format(mean(T60sx1), digits = 3)),cex=0.8)
 ```
 ###Figure S3: Additional experiment
-```{r echo=FALSE}
+```{r Figure S3}
 ###Figure2 
 library(ggpubr)
 library(phyloseq)
@@ -762,7 +748,7 @@ mtext("PCoA axis 1 (13.8 %)", side = 2, outer = TRUE, line = 1.4, cex=0.8)
 ```
 
 ###Figure S4: Diveristy plot 
-```{r echo=FALSE}
+```{r Figure S4}
 #D=1, Richness
 #D=2, Shannon
 #D=3, Simpson
@@ -838,7 +824,7 @@ mtext(DayLab, side = 3, outer = TRUE, line = 0, cex=0.8,
 
 
 ###Figure S5 and S6: Richness and eveness in function of select phyla 
-```{r echo=FALSE}
+```{r Figure S5 and S6}
 
 Table_oldold=read.table("Final_table_dada2.tsv",header=T, row.names = 1)
 Meta=read.csv("MetaData.csv",header=T, row.names = 1)
