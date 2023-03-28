@@ -2,8 +2,7 @@
 #### Authors: Jinny W. Yang and Vincent J. Denef
 
 This is the repository for the manuscript "Dissecting host-microbiome interaction effects on phytoplankton microbiome composition and diversity" written by Jinny W. Yang and Vincent J. Denef
-The raw data can be obtained from the Sequence Read Archive at NCBI under accession SRP, which are associated with BioProject PRJNA
-
+The raw data can be obtained from the Sequence Read Archive at NCBI under BioProject PRJNA941033.
 
 
 ####Information about this repository:
