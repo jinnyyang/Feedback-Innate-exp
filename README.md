@@ -1,6 +1,12 @@
-# Feedback-Innate-exp
-#### Here are data and R scripts from the reserach manuscript titled "Dissecting host-microbiome interaction effects on phytoplankton microbiome composition and diversity". Authors: Jinny W Yang and Vincent J Denef
+# Dissecting host-microbiome interaction effects on phytoplankton microbiome composition and diversity
+#### Authors: Jinny W. Yang and Vincent J. Denef
 
+This is the repository for the manuscript "Dissecting host-microbiome interaction effects on phytoplankton microbiome composition and diversity" written by Jinny W. Yang and Vincent J. Denef
+The raw data can be obtained from the Sequence Read Archive at NCBI under accession SRP, which are associated with BioProject PRJNA
+
+
+
+####Information about this repository:
 R scripts are in "R scripts.Rmd" and "Functions.R"
 
 The ASV table for the main experiment is "Final_table_dada2.tsv"
