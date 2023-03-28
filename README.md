@@ -17,7 +17,7 @@ This is the repository for the manuscript "Dissecting host-microbiome interactio
   - "Final_table_dada2.tsv" is the raw ASV table.
   - "MetaData.csv" includes the metada for data analysis.
   - "Taxonomy.csv" includes the taxoonomy data for each ASV.
-  - "AE_Final_table_data2.tsv" and "AE_MetaData.csv" includesthe ASV table and metadata for the additional experiment. 
+  - "AE_Final_table_data2.tsv" and "AE_MetaData.csv" includes ASV table and metadata of the additional experiment. 
 
 
 **Note**: This project is under the GNU general public License.
