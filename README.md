@@ -11,8 +11,8 @@ This is the repository for the manuscript "Dissecting host-microbiome interactio
  - Original fastq files:
     - The raw data can be obtained from the Sequence Read Archive at NCBI under BioProject PRJNA941033.
 - Code files
-  - `R scripts.Rmd` includes all the data analysis :shipit:
-  - `Functions.R` has all the function written.
+  - `R scripts_updated_20231031.Rmd` includes all the data analysis :shipit:
+  - `Functions_updated_20231031.R` has all the function written.
 - Directories/Directory Set up:
   - "Final_table_dada2.tsv" is the raw ASV table.
   - "MetaData.csv" includes the metada for data analysis.
