@@ -1,0 +1,1017 @@
+---
+title: "Dissecting host-microbiome interaction effects on phytoplankton microbiome composition and diversity"
+author: "Jinny Wu Yang"
+date: "2023-03-09"
+output: html_document
+---
+
+### Set the Global Knitr Options
+```{r knitr_global_options, eval = TRUE, echo = TRUE}
+# Set the global options
+knitr::opts_chunk$set(eval = TRUE, 
+                      echo = TRUE, 
+                      warning = FALSE,
+                      message= FALSE,
+                      fig.path="Figures/",
+                      fig.align = "center")
+# Set the seed
+set.seed(49856)
+```
+
+
+### Load in R-Packages and Set the Working Environment
+```{r load libraries and packages}
+# Load packages
+necessary_packages=c("ggpubr","phyloseq","stats","vegan","ape","dplyr","quantreg","ggplot2","lme4","reshape2")
+
+packages = lapply(necessary_packages, library, character.only = TRUE)
+
+# Set the working Directory
+setwd("~/Feedback-Innate-exp")
+
+### Source written functions in the file Functions.R that is housed within the "Feedback-Innate-exp"
+source("Functions_updated_20231031.R")
+```
+
+### Import Data 
+```{r data import}
+RawTable=read.table("Final_table_dada2.tsv",header=T, row.names = 1) ### ASV table
+Meta=read.csv("MetaData.csv",header=T, row.names = 1) ###Meta data
+Taxonomy=read.csv("Taxonomy.csv",header=T, row.names = 1) ###taxonomy data
+```
+
+
+### Removed 0 ASV and community with <2000 reads and matching ASV with taxonomy data and  Metatdata
+```{r cleaning ASV table}
+Table=RawTable[row.names(RawTable) %in% rownames(Taxonomy[which(Taxonomy$D1!="NA"),]),] ##remove Bacteria-unclassified
+Table=filter(Table,rowSums(Table)!=0) ##Remove ASV is zero in all samples
+write.csv(colSums(Table),"Table_SampleReads#.csv")
+Table=Table[,which(colSums(Table)>=2000)] ##remove community with <2000 reads
+
+###Filter Metadata based on the filtered ASV table
+Hratio=numeric()
+Day=numeric()
+Name=numeric()
+for (i in 1:ncol(Table)){
+  Hratio[i]=filter(Meta,rownames(Meta) == colnames(Table)[i])$Hratio
+  Day[i]=filter(Meta,rownames(Meta) == colnames(Table)[i])$Day
+  Name[i]=rownames(filter(Meta,rownames(Meta) == colnames(Table)[i]))
+}
+Filtered_Meta=data.frame(Day,Hratio)
+rownames(Filtered_Meta)=Name
+
+##
+```
+
+
+## Impacts on microbiome composition (Ordination analysis) 
+### Calculate distance matrix and PCoA
+```{r PCoA}
+BC_dist = avgdist(t(Table), 2000,  dmethod = "bray") ## calculate Bray-Curtis distance matrix
+BC_dist_matrix=as.matrix(BC_dist, labels=TRUE)
+PCOA = pcoa(BC_dist, correction = "cailliez") ## calculate PCoA, correction added in case of negative eigenvalues
+
+###Preparing my table
+Day=sapply(strsplit(sapply(strsplit(rownames(PCOA$vectors), "D" , fixed = TRUE), "[", 2),"R",fixed=T),"[",1)
+H=sapply(strsplit(sapply(strsplit(rownames(PCOA$vectors), "H" , fixed = TRUE), "[", 2),"D",fixed=T),"[",1)
+HR=as.numeric(factor(rank(as.numeric(H))))
+
+MyData=data.frame(PCOA$vectors[,1],PCOA$vectors[,2],Day,H)
+
+```
+
+### Plot Figure 2
+```{r plot Figure 2}
+pdf("Figure 2.pdf", width = 5.5, height = 3.3) 
+par(mfrow = c(2,3)) # 2-by-3 grid of plots
+par(oma = c(3, 3, 1, 1)) # make room for the overall x and y axis titles
+par(mar = c(0, 0, 0, 0)) # make the plots be closer together
+COL=c("darkgreen","blue","brown","red","orange","gold","black")
+PCH=c(15,0,17,2,16,1,8)
+PermanovaTable=list()
+OrdinationEachDay(MyData,2,COL,PCH)
+#PermanovaTable[[1]]=PERMANOVAandANOSIM(Table,Filtered_Meta,2)
+
+axis(2, at = c(-0.4,-0.3,-0.2,-0.1,0,0.1, 0.2, 0.3, 0.4), label = rep("", 9), tck = -0.03)
+axis(2, las=1, at = c(-0.4,-0.3,-0.2,-0.1,0,0.1, 0.2, 0.3,0.4), cex.axis=0.7, line = -0.5, lwd = 0)
+text(x=-0.185, y = 0.3, label = "(a) Day 2", cex = 1)
+
+OrdinationEachDay(MyData,4,COL,PCH)
+
+#PermanovaTable[[2]]=PERMANOVAandANOSIM(Table,Filtered_Meta,4)
+text(x=-0.185, y = 0.31, label = "(b) Day 4", cex = 1)
+
+OrdinationEachDay(MyData,6,COL,PCH)
+
+#PermanovaTable[[3]]=PERMANOVAandANOSIM(Table,Filtered_Meta,6)
+text(x=-0.185, y = 0.31, label = "(c) Day 6", cex = 1)
+
+OrdinationEachDay(MyData,8,COL,PCH)
+
+#PermanovaTable[[4]]=PERMANOVAandANOSIM(Table,Filtered_Meta,8)
+axis(1, at = c(-0.4,-0.3,-0.2,-0.1,0,0.1, 0.2, 0.3,0.4), label = rep("", 9), tck = -0.03)
+axis(1,las=1, cex.axis=0.6,line = -0.7, lwd = 0)
+axis(2, at = c(-0.4,-0.3,-0.2,-0.1,0,0.1, 0.2, 0.3, 0.4), label = rep("", 9), tck = -0.03)
+axis(2, las=1, at = c(-0.4,-0.3,-0.2,-0.1,0,0.1, 0.2, 0.3,0.4), cex.axis=0.7, line = -0.5, lwd = 0)
+text(x=-0.185, y = 0.31, label = "(d) Day 8", cex = 1)
+
+OrdinationEachDay(MyData,10,COL,PCH)
+
+#PermanovaTable[[5]]=PERMANOVAandANOSIM(Table,Filtered_Meta,10)
+axis(1, at = c(-0.4,-0.3,-0.2,-0.1,0,0.1, 0.2, 0.3,0.4), label = rep("", 9), tck = -0.03)
+axis(1,las=1, cex.axis=0.6,line = -0.7, lwd = 0)
+text(x=-0.175, y = 0.31, label = "(e) Day 10", cex = 1)
+
+OrdinationEachDay(MyData,12,COL,PCH)
+
+#PermanovaTable[[6]]=PERMANOVAandANOSIM(Table,Filtered_Meta,12)
+axis(1, at = c(-0.4,-0.3,-0.2,-0.1,0,0.1, 0.2, 0.3,0.4), label = rep("", 9), tck = -0.03)
+axis(1, las=1, cex.axis=0.6, line = -0.7, lwd = 0)
+text(x=-0.175, y = 0.31, label = "(f) Day 12", cex = 1)
+
+legend(x = c(0.25,0.45), y = c(-0.1,0.34),
+       title = "feedback\n-to-innate \nindex",
+       legend=c("100%","75%","50%","25%","5%","0%","Original"),
+       pch=PCH,
+       col=COL,
+       cex=0.65, bty="n")
+
+A1=PCOA$values$Rel_corr_eig[1]
+A2=PCOA$values$Rel_corr_eig[2]
+
+mtext("Axis PCoA 1 (21.9%)", side = 1, outer = TRUE, line = 1.4, cex=0.7)
+mtext("Axis PCoA 2 (14.1%)", side = 2, outer = TRUE, line = 1.7, cex=0.7)
+dev.off() 
+####
+```
+
+### Table S1 Premanova analysis 
+```{r Table S1}
+PERMANOVA=matrix(0,6,5)
+for (i in 1:6){
+  PERMANOVA[i,]=as.numeric(PermanovaTable[[i]][1,])
+}
+colnames(PERMANOVA)=colnames(PermanovaTable[[i]][1,])
+rownames(PERMANOVA)=c("Day 2", "Day 4", "Day 6", "Day 8","Day 10","Day 12")
+write.csv(PERMANOVA,"PERMANOVA.csv")
+```
+
+##### Bacterial composition of original microbiome and microbiome collected on Day 12
+### Plot Figure 3
+```{r plot Figure 3}
+pdf("Figure 3.pdf", width = 12, height = 6) 
+
+Table=read.table("Final_table_dada2.tsv",header=T, row.names = 1)
+Meta=read.csv("MetaData.csv",header=T, row.names = 1)
+Taxonomy=read.csv("Taxonomy.csv",header=T, row.names = 1)
+
+Genus=sapply(strsplit(Taxonomy[,6],"__", fixed = TRUE), "[", 2)
+Family=sapply(strsplit(Taxonomy[,5],"__", fixed = TRUE), "[", 2)
+Class=sapply(strsplit(Taxonomy[,3],"__", fixed = TRUE), "[", 2)
+Class[which(is.na(Class))]="Unclassified"
+Genus[which(Genus=="Allorhizobium-Neorhizobium-Pararhizobium-Rhizobium")]="A-N-P-R"
+Genus[which(Genus=="uncultured anaerobic ammonium-oxidizing bacterium")]="UAAOB"
+Genus[which(Genus=="uncultured bacterium")]="Uncultured"
+Genus[which(Genus=="uncultured")]="Uncultured"
+Genus[which(is.na(Genus))]="Unclassified"
+Family[which(Family=="uncultured anaerobic ammonium-oxidizing bacterium")]="UAAOB"
+Family[which(is.na(Family))]="Unclassified"
+Name_final=paste(Genus,"/",
+                 Family,"/",
+                 Class)
+TAX=cbind(Taxonomy,Name_final)
+Sample_all=colnames(Table)
+CE1_Only=Table[,which(sapply(strsplit(Sample_all, "H" , fixed = TRUE), "[", 1)=="CE1")]
+Original=Table[,which(sapply(strsplit(Sample_all, "X" , fixed = TRUE), "[", 1)=="CE1")]
+write.csv(Original,"Original_table.csv")
+
+Sample=colnames(CE1_Only)
+Day12=CE1_Only[,which(sapply(strsplit(sapply(strsplit(Sample, "D" , fixed = TRUE), "[", 2), "R" , fixed = TRUE), "[", 1)==12)]
+TTTT=cbind(Original,Day12)
+TTT = rarefy_even_depth(otu_table(t(TTTT),taxa_are_rows=F), rngseed=1, sample.size=2000, replace=T)
+TTT=t(TTT)
+NTAX=matrix(0,nrow(TTT),8)
+ASV=numeric()
+for (i in 1:nrow(TTT)){
+  NTAX[i,]=as.matrix(TAX[which(rownames(TTT)[i]==rownames(TAX)),])
+  ASV[i]=rownames(as.matrix(TAX[which(rownames(TTT)[i]==rownames(TAX)),]))
+}
+colnames(NTAX)=c("D0","D1","D2","D3","D4","D5","D6","Name")
+NTTT=cbind(TTT,NTAX)
+colnames(NTTT)
+NTTT=as.data.frame(NTTT)
+NTTT$Name = with(NTTT, reorder(Name, CE1XenicR1, mean))
+NTTT$Name = factor(NTTT$Name, levels = rev(levels(NTTT$Name)))
+
+NNNNT=cbind(rownames(NTTT),NTTT[,1:32],NTTT$Name)
+colnames(NNNNT)=c("ASV",colnames(NTTT)[1:32],"Name")
+
+NNNNT$Name = with(NNNNT, reorder(Name, CE1XenicR1, mean))
+NNNNT$Name = factor(NNNNT$Name, levels = rev(levels(NNNNT$Name)))
+
+MT_old=melt(NNNNT,id=c(1,34))
+SampleName=sapply(strsplit(as.character(MT_old$variable), "R" , fixed = TRUE), "[", 1)
+MT=data.frame(MT_old,SampleName)
+MT$value=as.numeric(MT$value)
+
+MT$variable = factor(MT$variable,levels = c("CE1XenicR1", "CE1XenicR2", 
+                                           "CE1H100D12R1","CE1H100D12R2","CE1H100D12R3","CE1H100D12R4","CE1H100D12R5",
+                                           "CE1H75D12R1","CE1H75D12R2","CE1H75D12R3","CE1H75D12R4","CE1H75D12R5",
+                                           "CE1H50D12R1","CE1H50D12R2","CE1H50D12R3","CE1H50D12R4","CE1H50D12R5",
+                                           "CE1H25D12R1","CE1H25D12R2","CE1H25D12R3","CE1H25D12R4","CE1H25D12R5",
+                                           "CE1H5D12R1","CE1H5D12R2","CE1H5D12R3","CE1H5D12R4","CE1H5D12R5",
+                                           "CE1H0D12R1","CE1H0D12R2","CE1H0D12R3","CE1H0D12R4","CE1H0D12R5"))
+MT$SampleName = factor(MT$SampleName,levels = c("CE1Xenic","CE1H100D12","CE1H75D12","CE1H50D12","CE1H25D12","CE1H5D12","CE1H0D12"))
+
+NewName=c("Original","100%","75%","50%","25%","5%","0%")
+write.csv(MT,"Figure3_beforeMelt.csv")
+MMT=aggregate(value~SampleName+Name+ASV,MT,FUN=mean)
+Sig_ASV=c("b4cda09d060fb91d6f8b18088def8814",
+          "c2cf886db5c0fa5cbf00428e09abcfa5",
+          "643b971bcf5c440babe7d74c3cd785a1",
+          "c7fb3bec6f60542d0daddc0016cfbf7f",
+          "f7b91641be59db915aa5d90586a15286",
+          "2dd2f5c190cc496511cac893bfb368ce",
+          "f8311c55ceb334b421493eaeb5f22b1a",
+          "ca497db8096dc55eb7e2b150b2d3bb8d",
+          "eb0a55bbb85a6380982699e86e69c865",
+          "561059d625ad500c1035c1b483beb2e0",
+          "e8c034452f8a464eef1d49136188fc0e",
+          "47fc681cb3efec4f7ea30eede73617a9",
+          "9f7c934ab018901c37d60376a619c3ea",
+          "efd122cd4103becf1a810424aac8ebdc",
+          "ddec5caa368362d3dd22332a8369068e",
+          "360f397d7e970f206e2565a67f9e3f76") 
+
+Cor=c("-","-","-","-","-","-","-","-","-","+","+","+","+","+","+","+","+","+","+")
+
+rownames(MMT)
+COR=rep("",length(MMT$ASV))
+
+for (i in 1:18){
+  COR[which(MMT$ASV==Sig_ASV[i])]=Cor[i]
+}
+COR[is.na(COR)]=""
+COR2=COR
+COR2[which(COR2=="-")]="+"
+NMTT=data.frame(MMT,COR,COR2)
+write.csv(NMTT,"Figure3.csv")
+
+COLOR=NMTT$COR
+COLOR[COLOR==""]="black"
+COLOR[COLOR=="+"]="darkgreen"
+COLOR[COLOR=="-"]="gold"
+
+SIZE=NMTT$COR
+SIZE[SIZE==""]=0.3
+SIZE[SIZE=="+"]=0.7
+SIZE[SIZE=="-"]=0.7
+SIZE=as.numeric(SIZE)
+
+ALPHA=NMTT$COR
+ALPHA[ALPHA==""]=0.99
+ALPHA[ALPHA=="+"]=1
+ALPHA[ALPHA=="-"]=1
+ALPHA=as.numeric(ALPHA)
+
+###########
+Sig_ASV=c("b4cda09d060fb91d6f8b18088def8814",
+          "c2cf886db5c0fa5cbf00428e09abcfa5",
+          "643b971bcf5c440babe7d74c3cd785a1",
+          "c7fb3bec6f60542d0daddc0016cfbf7f",
+          "f7b91641be59db915aa5d90586a15286",
+          "2dd2f5c190cc496511cac893bfb368ce",
+          "f8311c55ceb334b421493eaeb5f22b1a",
+          "76497e4518f53b084e0ae8b96a2dcaec",
+          "d708ab1f7b446fe572eeafb4ed6566ef",
+          "ca497db8096dc55eb7e2b150b2d3bb8d",
+          "eb0a55bbb85a6380982699e86e69c865",
+          "561059d625ad500c1035c1b483beb2e0",
+          "e8c034452f8a464eef1d49136188fc0e",
+          "47fc681cb3efec4f7ea30eede73617a9",
+          "9f7c934ab018901c37d60376a619c3ea",
+          "efd122cd4103becf1a810424aac8ebdc",
+          "ddec5caa368362d3dd22332a8369068e",
+          "360f397d7e970f206e2565a67f9e3f76") 
+
+Cor=c("-","-","-","-","-","-","-","-","-","+","+","+","+","+","+","+","+","+","+")
+
+custom_colors <- c(
+  "#1f78b4", "#dd3497", "#e31a1c", "grey", "gold", "#6a3d9a",
+  "#b15928", "#fb8072", "#b2df8a", "#44aa99", "#fdb462", "#80b1d3",
+  "#ffed6f", "darkgrey", "bisque", "#bc80bd", "#fccde5", "brown",
+  "#8c564b", "#9467bd", "#e377c2", "#332288", "#bcbd22", "#17becf",
+  "grey", "#8dd3c7", "darkgreen","tan", "white")
+
+
+ggplot(data=NMTT, aes(x=SampleName, y=value, fill=Name,linetype=COR2)) +
+  geom_bar(stat="identity",colour = "black", size = 0.2)+
+  theme_bw()+
+  guides(fill=guide_legend(ncol=3))+
+  coord_flip()+
+  theme(legend.position="bottom")+
+  theme(legend.title=element_blank())+
+  theme(legend.text=element_text(size=8))+
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank())+
+  theme(legend.key.size = unit(0.4,'cm'))+
+  scale_x_discrete(labels=NewName) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  scale_linetype_manual(values = c("dotted","solid"))+
+  geom_bar(color = "black",size=0.4,stat="identity")+
+  guides(linetype = "none")+
+  scale_fill_manual(values=custom_colors)
+dev.off() 
+```
+
+#####Identifying bacterial taxa in response to an increasing feedback-to-innate indices
+
+###Data organization
+```{r organize data}
+##Prepare cor data
+library(lme4)
+ASVreaction= data.frame(matrix(ncol = 3, nrow = nrow(CE1_Only)))
+CE1_Only[apply(CE1_Only!=0, 1, all),]
+for (i in 1:nrow(CE1_Only)){
+  ASV=CE1_Only[i,]
+  Day=sapply(strsplit(sapply(strsplit(colnames(ASV), "D" , fixed = TRUE), "[", 2), "R" , fixed = TRUE), "[", 1)
+  Hratio=sapply(strsplit(sapply(strsplit(colnames(ASV), "D" , fixed = TRUE), "[", 1), "H" , fixed = TRUE), "[", 2)
+  D=data.frame(t(ASV),as.numeric(Day),as.numeric(Hratio))
+  colnames(D)=c("ASV","Day","Hratio")
+  Day12=D[which(D$Day==12),]
+  Day12[-Day12$ASV==0,]
+  ASVreaction[i,1]=cor(Day12$ASV,Day12$Hratio)
+  ASVreaction[i,2]=p.adjust(cor.test(Day12$ASV,Day12$Hratio)$p.value, method = "bonferroni")
+  ASVreaction[i,3]=sum(Day12$ASV)
+  rownames(ASVreaction)[i]=rownames(ASV)
+}
+colnames(ASVreaction)[3]="ReadSum"
+
+C_12=CorelationCoefficientEachH(ASVreaction,CE1_Only)
+```
+
+
+###Matching taxonomy data
+```{r match/align taxonomy data}
+##Let match Taxonomy, rename and organization
+DATA=C_12
+MM=data.frame(matrix(nrow=nrow(DATA),ncol=ncol(Taxonomy)))
+for (i in 1: nrow(DATA)){
+  which(rownames(Taxonomy)==rownames(DATA)[i])
+  MM[i,]=Taxonomy[which(rownames(Taxonomy)==rownames(DATA)[i]),1:6]
+}
+ALL=data.frame(DATA,MM)
+write.csv(ALL,"Figure4_testing.csv")
+colnames(ALL)[10:15]=c("Kindom","Phylum","Class","Order","Family","Genus")
+ALL$Order[which(is.na(ALL$Order)==T)]="Unclassified"
+ALL=ALL[which(ALL$Order!="D_3__Clostridiales"),] ##Not shown in original microbiome, need to change to remove specific ASV...
+ALL=ALL[which(ALL$Genus!="D_5__Flavobacterium"),] ##Not shown in original microbiome
+ALL=ALL[which(ALL$SUM>=100),]
+ALL_rawPvalue=ALL$P.value
+ALL$P.value[which(ALL$P.value<=0.05)]="sig"
+ALL$P.value[which(as.numeric(ALL$P.value)>=0.05)]="non-sig"
+COLOR=numeric()
+Positive=ALL$Cor>0 & ALL$P.value=="sig"
+Negative=ALL$Cor<0 & ALL$P.value=="sig"
+Non=ALL$P.value=="non-sig"
+COLOR[which(Positive==T)]="darkgreen"
+COLOR[which(Negative==T)]="orange"
+COLOR[which(Non==T)]="darkgrey"
+ALL=data.frame(ALL,COLOR)
+###Change name..
+NAME1=sapply(strsplit(ALL$Family, "__" , fixed = TRUE), "[", 2)
+NAME2=sapply(strsplit(ALL$Genus, "__" , fixed = TRUE), "[", 2)
+NAME3=sapply(strsplit(ALL$Order, "__" , fixed = TRUE), "[", 2)
+NAME4=sapply(strsplit(ALL$Class, "__" , fixed = TRUE), "[", 2)
+Data=data.frame(ALL$Cor,ALL_rawPvalue,NAME1,NAME2,NAME3,NAME4,ALL$P.value,COLOR,ALL$SUM/sum(ALL$SUM))
+Data=Data[which(Data$ALL.P.value!="non-sig"),]
+Data$NAME2[which(is.na(Data$NAME2))]="Unclassified"
+Data$NAME2[which(Data$NAME2=="Allorhizobium-Neorhizobium-Pararhizobium-Rhizobium")]="A-N-P-R"
+Data$NAME2[which(Data$NAME2=="uncultured bacterium")]="Unclassified"
+Data$NAME2[which(Data$NAME2=="uncultured")]="Uncultured"
+Data$NAME1[which(is.na(Data$NAME1))]="Unclassified"
+Data$NAME2[which(is.na(Data$NAME2))]="Unclassified"
+Data$NAME3[which(is.na(Data$NAME3))]="Unclassified"
+Data$NAME4[which(is.na(Data$NAME4))]="Unclassified"
+
+NAME=paste(Data$NAME2,"\n(",Data$NAME1,"\n/",Data$NAME4,")")
+
+Data=data.frame(Data,NAME)
+Data$NAME = with(Data, reorder(NAME, ALL.Cor, mean)) ###Reorder 
+
+```
+
+###Plot Figure4:Correlation coefficient relationsihp
+```{r plot Figure 4}
+###Plot Cor
+pdf("Figure 4.pdf", width = 8, height = 5) 
+ggplot(data=Data,aes(y=NAME, x=ALL.Cor, horizontal=TRUE))+
+  theme_bw() + 
+  geom_point(fill=Data$COLOR, 
+             size = 5.5, color='black',shape=21) +
+  scale_color_manual(values = c("darkgreen","orange"),
+                     limits = c("Incresae","Decrease")) +
+  theme(axis.text=element_text(size=7),
+        axis.title = element_text(size = 8),
+        plot.margin = margin(0.05,0.05,0.001,0.05, "cm")) +
+  xlab("Pearson's Correlation coefficient") +
+  ylab("") + 
+  theme(axis.title.y=element_text(angle=0))+ 
+  theme(axis.text.y = element_text(angle = 0, hjust = 1, colour = "black",
+                                   face = "italic"))
+dev.off() 
+```
+
+###Figure 5
+#Diversity
+##
+```{r plot Prepare Diversity table}
+Table=RawTable
+
+ps.rarefied = rarefy_even_depth(otu_table(t(Table),taxa_are_rows=F), rngseed=1, sample.size=2000, replace=T)
+Table_rarefied=t(ps.rarefied)
+Sample_all=colnames(Table_rarefied)
+Table=Table_rarefied[,which(sapply(strsplit(Sample_all, "H" , fixed = TRUE), "[", 1)=="CE1")]
+
+Richness=colSums(ifelse(Table> 1,1,0))
+Shannon=diversity(t(Table),"shannon")
+Simpson=diversity(t(Table),"simpson")
+invSimpson=diversity(t(Table),"invsimpson")
+Evenness=invSimpson/Richness
+Day=sapply(strsplit(sapply(strsplit(names(Richness), "D" , fixed = TRUE), "[", 2),"R",fixed=T),"[",1)
+H=sapply(strsplit(sapply(strsplit(names(Richness), "H" , fixed = TRUE), "[", 2),"D",fixed=T),"[",1)
+MyData=data.frame(Richness,Shannon,Simpson,Evenness,Day,H)
+```
+
+```{r Figure 5}
+pdf("Figure 5.pdf", width = 6, height =2.2) 
+
+#D=1, Richness
+#D=2, Shannon
+#D=3, Simpson
+#D=4, Evenness
+par(mfrow = c(1,3)) # 3-by-2 grid of plots
+par(oma = c(1, 1, 2, 1)) # make room for the overall x and y axis titles
+par(mar = c(3, 3, 0, 0)) # make the plots be closer together
+
+Ordered_MyData=MyData[order(as.numeric(MyData$H)),]
+MyData=Ordered_MyData
+MyData$H=as.numeric(MyData$H)
+  DDay12=filter(MyData, MyData$Day==12)
+  
+figure5(MyData,1,15,31)
+mtext("(a)",at=1,line=-1,cex=0.7)
+figure5(MyData,4,0.1,0.4)
+mtext("(b)",at=1,line=-1,cex=0.7)
+figure5(MyData,2,1.5,2.5)
+mtext("(c)",at=1,line=-1,cex=0.7)
+
+mtext("Feedback-to-innate index", side = 1, outer = TRUE, line = -1.5, cex=0.9)
+mtext("Diversity indices", side = 2, outer = TRUE, line = -0.5, at=0.6,cex=0.9)
+mtext("Richness", side = 3, outer = TRUE, line = 0, cex=0.9, at=0.2, font=1)
+mtext("Evenness", side = 3, outer = TRUE, line = 0, cex=0.9, at=0.55,font=1)
+mtext("Shannon", side = 3, outer = TRUE, line = 0, cex=0.9, at=0.88, font=1)
+dev.off() 
+```
+
+
+## Sumpplemenotry figures 
+###Figure S1: Rarefaction
+```{r Figure S1}
+
+```
+
+###Figure S3: Linear regression assumptions test.
+```{r Figure S3}
+############ testing linear regression assumption######
+###Evenness
+l=lm(DDay12[,4]~as.numeric(DDay12$H))
+### Residual vs Fitted
+plot(residuals(l),fitted(l),xlab = "Residuals",ylab = "Fitted")
+MEAN=mean(residuals(l))
+  
+  State = vector('expression',4)
+  State[1] = substitute(expression(italic(Residuals:Mean) == MYVALUE), 
+                        list(MYVALUE = format(MEAN, digits = 2)))[2]
+  State[2] = substitute(expression(italic(D-W:Autocorrelation) == MYVALUE), 
+                        list(MYVALUE = format(as.numeric(durbinWatsonTest(l)[1]), digits = 2)))[2]
+  State[3] = substitute(expression(italic(D-W:Statistic) == MYVALUE), 
+                        list(MYVALUE = format(as.numeric(durbinWatsonTest(l)[2]), digits = 2)))[2]
+  State[4] = substitute(expression(italic(D-W:p-value) == MYVALUE), 
+                        list(MYVALUE = format(durbinWatsonTest(l)[3], digits = 2)))[2]
+  #legend("bottomleft",legend=State,  text.col=c("blue"), bty = 'n',cex=0.6)
+  legend("bottomleft",legend=State,  text.col=c("black"), bty = 'n',cex=0.6)
+  
+### assumption of independence:Durbin Watson test
+library(car)
+durbinWatsonTest(l) 
+
+```
+
+###Figure S4: Diveristy plot 
+```{r Figure S4}
+pdf("Figure S4.pdf", width = 6, height = 3.5) 
+#D=1, Richness
+#D=2, Shannon
+#D=3, Simpson
+#D=4, Evenness
+par(mfrow = c(3,6)) # 3-by-6 grid of plots
+par(oma = c(4, 4, 2, 1)) # make room for the overall x and y axis titles
+par(mar = c(0, 0, 0, 0)) # make the plots be closer together
+Label=c("(a)","(b)","(c)","(d)","(e)","(f)")
+Xaxis=F
+Ordered_MyData=MyData[order(as.numeric(MyData$H)),]
+MyData=Ordered_MyData
+MyData$H=as.numeric(MyData$H)
+MyData$Day=as.numeric(MyData$Day)
+
+SplitBy_Day=split(MyData, MyData$Day)
+##Plot Richness
+a=5
+b=41
+c=5
+Xaxis=FALSE
+DATA=SplitBy_Day[[2]]
+x=as.numeric(DATA$H)
+y=DATA$Richness
+DiveristyPlot_WithYaxis(x,y,a,b,c,Xaxis)
+for (i in 3:7){
+  DATA=SplitBy_Day[[i]]
+  x=as.numeric(DATA$H)
+  y=DATA$Richness
+  DiveristyPlot_NoYaxis(x,y,a,b,c,Xaxis)
+}
+#plot Evenness
+a=0.07
+b=0.5
+c=0.1
+DATA=SplitBy_Day[[2]]
+x=as.numeric(DATA$H)
+y=DATA$Evenness
+DiveristyPlot_WithYaxis(x,y,a,b,c,Xaxis)
+for (i in 3:7){
+  DATA=SplitBy_Day[[i]]
+  x=as.numeric(DATA$H)
+  y=DATA$Evenness
+  DiveristyPlot_NoYaxis(x,y,a,b,c,Xaxis)
+}
+#plot Shannon
+a=0.9
+b=2.8
+c=0.5
+DATA=SplitBy_Day[[2]]
+x=as.numeric(DATA$H)
+y=DATA$Shannon
+Xaxis=TRUE
+DiveristyPlot_WithYaxis(x,y,a,b,c,Xaxis)
+for (i in 3:7){
+  DATA=SplitBy_Day[[i]]
+  x=as.numeric(DATA$H)
+  y=DATA$Shannon
+  DiveristyPlot_NoYaxis(x,y,a,b,c,Xaxis)
+}
+
+mtext("Feedback-to-Innate index", side = 1, outer = TRUE, line = 1.5, cex=0.8)
+mtext("Richness", side = 2, outer = TRUE, line = 2, cex=0.8, at=0.85, font=1)
+mtext("Evenness", side = 2, outer = TRUE, line = 2, cex=0.8, at=0.5,font=1)
+mtext("Shannon index", side = 2, outer = TRUE, line = 2, cex=0.8, at=0.2, font=1)
+DayLab=c("Day2","Day 4","Day 6","Day 8","Day 10","Day 12")
+mtext(DayLab, side = 3, outer = TRUE, line = 0, cex=0.8, 
+      at=c(0.075,0.25,0.425,0.575,0.75,0.925), font=1)
+
+dev.off() 
+
+```
+
+
+
+
+###Figure S5: Additional experiment
+```{r Figure S3}
+library(ggpubr)
+library(phyloseq)
+library(stats)
+library(dplyr)
+Table=read.table("AE_Final_table_dada2.tsv",header=T, row.names = 1)
+Meta=read.csv("AE_MetaData.csv",header=T, row.names = 1)
+Sample_all=colnames(Table)
+ps.rarefied = rarefy_even_depth(otu_table(Table,taxa_are_rows=F), rngseed=1, sample.size=2000, replace=T)
+
+###############Ordination analysis##############
+Table_rarefied=data.frame(t(ps.rarefied))
+Sample_all=colnames(Table_rarefied)
+library(vegan)
+library(ape)
+library(dplyr)
+# First step is to calculate a distance matrix. 
+# Here we use Bray-Curtis distance metric
+BC_dist = avgdist(t(Table),1200,  dmethod = "bray")
+
+# PCoA is not included in vegan. 
+# We will use the ape package instead
+library(ape)
+# Some distance measures may result in negative eigenvalues. In that case, add a correction:
+PCOA = pcoa(BC_dist, correction = "cailliez")
+
+###Preparing my table
+rownames(PCOA$vectors)==rownames(Meta)
+Day=Meta$Day
+Ratio=Meta$Hratio
+Treatment=Meta$Treatment
+
+MyData=data.frame(PCOA$vectors[,1],PCOA$vectors[,2],Day,Treatment,Ratio)
+
+pdf("Figure S3.pdf", width = 6, height = 3.5) 
+
+par(mfrow = c(2,3)) # 2-by-2 grid of plots
+par(oma = c(3, 3, 1, 1)) # make room for the overall x and y axis titles
+par(mar = c(0, 0, 0, 0), xpd=TRUE) # make the plots be closer together
+
+DAY=c(2,4,6,8,10)
+DAY_Name=c("Day 2","Day 4","Day 6","Day 8","Day 10")
+Xaxis=c(F,F,T,T,T,T)
+Yaxis=c(T,F,F,T,F,F)
+for (i in 1:5){
+  day=DAY[i]
+  DDay=filter(MyData, MyData$Day==day)
+  plot(DDay[,1],DDay[,2],pch=1, col="white", 
+       xlim=c(min(MyData[,1]),max(MyData[,1])),
+       ylim=c(min(MyData[,2]),max(MyData[,2])),
+       type="b",xaxt="n",yaxt="n", 
+       xlab="", ylab="")
+  DD=filter(DDay, DDay$Treatment=="A")
+  points(DD[,1],DD[,2],pch=1, col="black")
+  
+  DD=filter(DDay, DDay$Treatment=="D")
+  points(DD[,1],DD[,2],pch=2, col="black")
+  
+  DD=filter(DDay, DDay$Treatment=="C")
+  DD50=filter(DD, DD$Ratio==50)
+  DD95=filter(DD, DD$Ratio==95)
+  points(DD50[,1],DD50[,2],pch=17, col="grey")
+  points(DD95[,1],DD95[,2],pch=17, col="black")
+  
+  DD=filter(DDay, DDay$Treatment=="H")
+  DD50=filter(DD, DD$Ratio==50)
+  DD95=filter(DD, DD$Ratio==95)
+  points(DD50[,1],DD50[,2],pch=15, col="grey")
+  points(DD95[,1],DD95[,2],pch=15, col="black")
+  text(x=-0.325, y = 0.25, label = DAY_Name[i], cex = 1)
+  DDay=filter(MyData, MyData$Day==0)
+  points(DDay[,1],DDay[,2],pch=8, col="black")
+  if (Xaxis[i]==T){
+    axis(1, at = c(-0.4,-0.3,-0.2,-0.1,0,0.1, 0.2, 0.3,0.4), label = rep("", 9), tck = -0.03)
+    axis(1, las=1, cex.axis=0.6, line = -0.55, lwd = 0)    
+  }
+  if (Yaxis[i]==T){
+    axis(2, at = c(-0.4,-0.3,-0.2,-0.1,0,0.1, 0.2, 0.3,0.4), label = rep("", 9), tck = -0.03)
+    axis(2, las=1, cex.axis=0.6, line = -0.55, lwd = 0)    
+  }
+}
+
+LEGEND=c("95%-to-5% Feedback-to-DOM","50%-to-50% Feedback-to-DOM",
+         "95%-to-5% Media-to-DOM","50%-to-50% Media-to-DOM",
+         "100% innate DOM","Chlorella sorokoniana",
+         "Original microbiome at Day0")
+
+legend("topleft", inset=c(1.05, 0.05),
+       title = "",
+       legend=LEGEND,
+       pch=c(15,15,17,17,2,1,8),
+       col=c("black","grey",
+             "black","gray",
+             "black","black","black"),
+       cex=0.9, bty="n", xpd=NA)
+
+mtext("PCoA axis 1 (38.4 %)", side = 1, outer = TRUE, line = 1.4, cex=0.8)
+mtext("PCoA axis 1 (13.8 %)", side = 2, outer = TRUE, line = 1.4, cex=0.8)
+dev.off() 
+```
+
+
+###Figure S6 and S7: Richness and eveness in function of select phyla 
+```{r Figure S5 and S6}
+
+Table_oldold=read.table("Final_table_dada2.tsv",header=T, row.names = 1)
+Meta=read.csv("MetaData.csv",header=T, row.names = 1)
+Taxonomy=read.csv("metadata_taxonomy_HandMade.csv",header=T, row.names = 1)
+
+###remove Bacteria-unclassified####
+Table_Alpha=Table_oldold[row.names(Table_oldold) %in% rownames(Taxonomy[which(Taxonomy$D2=="D_2__Alphaproteobacteria"),]),]
+Table_Bact=Table_oldold[row.names(Table_oldold) %in% rownames(Taxonomy[which(Taxonomy$D2=="D_2__Bacteroidia"),]),]
+Table_Gamma=Table_oldold[row.names(Table_oldold) %in% rownames(Taxonomy[which(Taxonomy$D2=="D_2__Gammaproteobacteria"),]),]
+GammaTax=which(Taxonomy$D2=="D_2__Gammaproteobacteria")
+
+Table_Actino=Table_oldold[row.names(Table_oldold) %in% rownames(Taxonomy[which(Taxonomy$D2=="D_2__Actinobacteria"),]),]
+
+
+FigureS4_Diveristy=function(Table_old){
+  #########Rarefaction######
+  ps.rarefied = rarefy_even_depth(otu_table(t(Table_old),taxa_are_rows=F), rngseed=1, sample.size=2000, replace=T)
+  
+  Table_rarefied=t(ps.rarefied)
+  Sample_all=colnames(Table_rarefied)
+  Table=Table_rarefied[,which(sapply(strsplit(Sample_all, "H" , fixed = TRUE), "[", 1)=="CE1")]
+  ##########################
+  
+  Richness=colSums(ifelse(Table> 1,1,0))
+  Shannon=diversity(t(Table),"shannon")
+  Simpson=diversity(t(Table),"simpson")
+  invSimpson=diversity(t(Table),"invsimpson")
+  Evenness=invSimpson/Richness
+  Day=sapply(strsplit(sapply(strsplit(names(Richness), "D" , fixed = TRUE), "[", 2),"R",fixed=T),"[",1)
+  H=sapply(strsplit(sapply(strsplit(names(Richness), "H" , fixed = TRUE), "[", 2),"D",fixed=T),"[",1)
+  MyData=data.frame(Richness,Shannon,Simpson,Evenness,Day,H)
+  return(MyData)
+  ##########################
+}
+Alpha=FigureS4_Diveristy(Table_Alpha)
+Gamma=FigureS4_Diveristy(Table_Gamma)
+Bact=FigureS4_Diveristy(Table_Bact)
+#Beta=FigureS4_Diveristy(Table_Beta)
+
+Diveristy_Day8_10_12=function(MyData){
+  Ordered_MyData=MyData[order(as.numeric(MyData$H)),]
+  MyData=Ordered_MyData
+  MyData$H=as.numeric(MyData$H)
+  
+  DDay8=filter(MyData, MyData$Day==8)
+  DDay10=filter(MyData, MyData$Day==10)
+  DDay12=filter(MyData, MyData$Day==12)
+  LIST=list(DDay8,DDay10,DDay12)
+  return(LIST)
+}
+
+Alpha_list=Diveristy_Day8_10_12(Alpha)
+Gamma_list=Diveristy_Day8_10_12(Gamma)
+Bact_list=Diveristy_Day8_10_12(Bact)
+
+#####Diversity plot###
+source("Functions_20220504.R")
+par(mfrow = c(3,2)) # 3-by-6 grid of plots
+par(oma = c(4, 5.5, 2, 1)) # make room for the overall x and y axis titles
+par(mar = c(0, 0, 0, 0)) # make the plots be closer together
+
+
+Each_plot=function(DDay10,D,Xaxis,Yaxis,a,b,c){
+  
+  plot(as.numeric(DDay10$H),DDay10[,D], xaxt="n", yaxt="n",
+       ylim=c(a,b),
+       xlim=c(-5,105))
+  
+  # fit the 2rd quadrilles regressions
+  y=DDay10[,D]
+  x=DDay10$H
+  fit2 <- lm(y~poly(x,2,raw=TRUE))
+  xx <- seq(0,100, length=50)
+  summary(fit2)
+  p2=summary(fit2)$coefficient[3,4]
+  if (p2<=0.05){L2=1}else{L2=2}
+  if (p2<=0.001){p2="<0.001"}else{p2=p2}
+  lines(xx, predict(fit2, data.frame(x=xx)), col="blue",lty=L2)
+  
+  # fit the linear regression
+  l=lm(DDay10[,D]~as.numeric(DDay10$H))
+  p=summary(l)$coefficient[2,4]
+  if (p<=0.05){L=1}else{L=2}
+  if (p<=0.001){p="<0.001"}else{p=p}
+  abline(l,lty=L)
+  State = vector('expression',2)
+  State[1] = substitute(expression(italic(p1:p-value) == MYVALUE), 
+                        list(MYVALUE = format(p, digits = 2)))[2]
+  State[2] = substitute(expression(italic(p2:p-value) == MYVALUE), 
+                        list(MYVALUE = format(p2, digits = 2)))[2]
+  
+  legend("topright",legend=State, bty = 'n',cex=0.8,text.col=c("black","blue"))
+  #text(-4.5,b*0.99, label = Label1, cex=0.9)
+  
+  if (Xaxis==TRUE) {
+    axis(1, at = c(0,25,50,75,100), 
+         label = rep("", 5), 
+         tck = -0.04)
+    axis(1, at = c(0,25,50,75,100), 
+         label = c("0%","25%","50%","75%","100%"), 
+         cex.axis=0.6,line = -0.7, lwd = 0)
+    axis(1, at = 5, 
+         label = "", 
+         tck = -0.03)
+    axis(1, at = 5, 
+         label = "5%", 
+         cex.axis=0.6,line = -1.1, lwd = 0)
+  }
+  
+  if (Yaxis==TRUE) {
+    axis(2, tck = -0.04, at = seq(a,b, by = c), 
+         label = rep("", length(seq(a,b, by = c))))
+    axis(2, las=1, cex.axis=0.7, at = seq(a,b, by = c),
+         line = -0.4, lwd = 0)
+  }
+  
+  
+}  
+
+Each_plot(Alpha_list[[2]],1,FALSE,TRUE,1,15,2)
+Each_plot(Alpha_list[[3]],1,FALSE,FALSE,1,15,2)
+
+Each_plot(Gamma_list[[2]],1,FALSE,TRUE,1,15,2)
+Each_plot(Gamma_list[[3]],1,FALSE,FALSE,1,15,2)
+
+
+Each_plot(Bact_list[[2]],1,TRUE,TRUE,1,15,2)
+Each_plot(Bact_list[[3]],1,TRUE,FALSE,1,15,2)
+
+
+mtext("Feedback-to-innate index", side = 1, outer = TRUE, line = 2, cex=0.8)
+mtext("Alphaproteobacteria\nrichness", side = 2, outer = TRUE, line = 2, cex=0.8, at=0.85, font=1)
+mtext("Gammaproteobacteria\nrichness", side = 2, outer = TRUE, line = 2, cex=0.8, at=0.5,font=1)
+mtext("Bacteroidia\nrichness", side = 2, outer = TRUE, line = 2, cex=0.8, at=0.15,font=1)
+mtext("Day 10", side = 3, outer = TRUE, line = 0, cex=0.8, at=0.25, font=1)
+mtext("Day 12", side = 3, outer = TRUE, line = 0, cex=0.8, at=0.75, font=1)
+
+######Evenness #######
+#####Diversity plot###
+source("Functions_20220504.R")
+par(mfrow = c(3,2)) # 3-by-6 grid of plots
+par(oma = c(4, 5.5, 2, 1)) # make room for the overall x and y axis titles
+par(mar = c(0, 0, 0, 0)) # make the plots be closer together
+
+Each_plot(Alpha_list[[2]],4,FALSE,TRUE,0,0.7,0.2)
+Each_plot(Alpha_list[[3]],4,FALSE,FALSE,0,0.7,0.2)
+
+Each_plot(Gamma_list[[2]],4,FALSE,TRUE,0,0.7,0.2)
+Each_plot(Gamma_list[[3]],4,FALSE,FALSE,0,0.7,0.2)
+
+Each_plot(Bact_list[[2]],4,TRUE,TRUE,0,0.7,0.2)
+Each_plot(Bact_list[[3]],4,TRUE,FALSE,0,0.7,0.2)
+
+mtext("Feedback-to-innate index", side = 1, outer = TRUE, line = 2, cex=0.8)
+mtext("Alphaproteobacteria\nevenness", side = 2, outer = TRUE, line = 2, cex=0.8, at=0.85, font=1)
+mtext("Gammaproteobacteria\nevenness", side = 2, outer = TRUE, line = 2, cex=0.8, at=0.5,font=1)
+mtext("Bacteroidia\nevenness", side = 2, outer = TRUE, line = 2, cex=0.8, at=0.15,font=1)
+mtext("Day 10", side = 3, outer = TRUE, line = 0, cex=0.8, at=0.25, font=1)
+mtext("Day 12", side = 3, outer = TRUE, line = 0, cex=0.8, at=0.75, font=1)
+```
+
+###Figure S8: Microbiome detachment experiment
+```{r Figure S8}
+pdf("Figure S1.pdf", width = 8, height = 5) 
+#No treatment
+aP1_A=46
+aP2_A=134
+aP3_A=139
+MeanContol_T1=mean(c(aP1_A,aP2_A,aP3_A))
+
+#rep x5
+W30s1_A=91
+W30s2_A=57
+W30s3_A=65
+T30s_x5_r1=(W30s1_A-MeanContol_T1)/MeanContol_T1
+T30s_x5_r2=(W30s2_A-MeanContol_T1)/MeanContol_T1
+T30s_x5_r3=(W30s3_A-MeanContol_T1)/MeanContol_T1
+
+#rep x10
+W60s1_A=69
+W60s2_A=41
+W60s3_A=94
+T60s_x10_r1=(W60s1_A-MeanContol_T1)/MeanContol_T1
+T60s_x10_r2=(W60s2_A-MeanContol_T1)/MeanContol_T1
+T60s_x10_r3=(W60s3_A-MeanContol_T1)/MeanContol_T1
+
+#rep x15
+W6r1_A=40
+W6r2_A=46
+W6r3_A=60
+T60s_x15_r1=(W6r1_A-MeanContol_T1)/MeanContol_T1
+T60s_x15_r2=(W6r2_A-MeanContol_T1)/MeanContol_T1
+T60s_x15_r3=(W6r3_A-MeanContol_T1)/MeanContol_T1
+
+#######
+#No treatment
+bP1_A=225
+bP2_A=207
+bP3_A=232
+bP4_A=307
+MeanContol_T2=mean(c(bP1_A,bP2_A,bP3_A,bP4_A))
+
+#rep 60sx1
+W30s1_A=299
+W30s2_A=257
+W30s3_A=476
+W30s4_A=543
+W30s5_A=266
+W30s6_A=160
+aT60s_x1_r1=(W30s1_A-MeanContol_T2)/MeanContol_T2
+aT60s_x1_r2=(W30s2_A-MeanContol_T2)/MeanContol_T2
+aT60s_x1_r3=(W30s3_A-MeanContol_T2)/MeanContol_T2
+aT60s_x1_r4=(W30s4_A-MeanContol_T2)/MeanContol_T2
+aT60s_x1_r5=(W30s5_A-MeanContol_T2)/MeanContol_T2
+aT60s_x1_r6=(W30s6_A-MeanContol_T2)/MeanContol_T2
+
+#rep 60sx3
+W60s1_A=636
+W60s2_A=323
+W60s3_A=337
+W60s4_A=453
+W60s5_A=173
+W60s6_A=230
+T60s_x3_r1=(W60s1_A-MeanContol_T2)/MeanContol_T2
+T60s_x3_r2=(W60s2_A-MeanContol_T2)/MeanContol_T2
+T60s_x3_r3=(W60s3_A-MeanContol_T2)/MeanContol_T2
+T60s_x3_r4=(W60s4_A-MeanContol_T2)/MeanContol_T2
+T60s_x3_r5=(W60s5_A-MeanContol_T2)/MeanContol_T2
+T60s_x3_r6=(W60s6_A-MeanContol_T2)/MeanContol_T2
+
+#rep 60sx6
+W6r1_A=246
+W6r2_A=269
+W6r3_A=345
+W6r4_A=376
+W6r5_A=278
+W6r6_A=181
+
+T60s_x6_r1=(W6r1_A-MeanContol_T2)/MeanContol_T2
+T60s_x6_r2=(W6r2_A-MeanContol_T2)/MeanContol_T2
+T60s_x6_r3=(W6r3_A-MeanContol_T2)/MeanContol_T2
+T60s_x6_r4=(W6r4_A-MeanContol_T2)/MeanContol_T2
+T60s_x6_r5=(W6r5_A-MeanContol_T2)/MeanContol_T2
+T60s_x6_r6=(W6r6_A-MeanContol_T2)/MeanContol_T2
+#########
+
+#No treatment
+cP1_A=43
+cP2_A=45
+cP3_A=35
+cP4_A=43
+cP5_A=41
+cP6_A=57
+MeanContol_T3=mean(c(cP1_A,cP2_A,cP3_A,cP4_A,cP5_A,cP6_A))
+
+#30sx1
+W30s1_A=50
+W30s2_A=53
+W30s3_A=51
+W30s4_A=51
+W30s5_A=69
+W30s6_A=56
+T30s_x1_r1=(W30s1_A-MeanContol_T3)/MeanContol_T3
+T30s_x1_r2=(W30s2_A-MeanContol_T3)/MeanContol_T3
+T30s_x1_r3=(W30s3_A-MeanContol_T3)/MeanContol_T3
+T30s_x1_r4=(W30s4_A-MeanContol_T3)/MeanContol_T3
+T30s_x1_r5=(W30s5_A-MeanContol_T3)/MeanContol_T3
+T30s_x1_r6=(W30s6_A-MeanContol_T3)/MeanContol_T3
+
+
+#30sx2
+W60s1_A=59
+W60s2_A=73
+W60s3_A=81
+W60s4_A=71
+W60s5_A=66
+W60s6_A=63
+T30s_x2_r1=(W60s1_A-MeanContol_T3)/MeanContol_T3
+T30s_x2_r2=(W60s2_A-MeanContol_T3)/MeanContol_T3
+T30s_x2_r3=(W60s3_A-MeanContol_T3)/MeanContol_T3
+T30s_x2_r4=(W60s4_A-MeanContol_T3)/MeanContol_T3
+T30s_x2_r5=(W60s5_A-MeanContol_T3)/MeanContol_T3
+T30s_x2_r6=(W60s6_A-MeanContol_T3)/MeanContol_T3
+
+
+# 60sx1
+W6r1_A=66
+W6r2_A=58
+W6r3_A=60
+W6r4_A=69
+W6r5_A=66
+W6r6_A=68
+bT60s_x1_r1=(W6r1_A-MeanContol_T3)/MeanContol_T3
+bT60s_x1_r2=(W6r2_A-MeanContol_T3)/MeanContol_T3
+bT60s_x1_r3=(W6r3_A-MeanContol_T3)/MeanContol_T3
+bT60s_x1_r4=(W6r4_A-MeanContol_T3)/MeanContol_T3
+bT60s_x1_r5=(W6r5_A-MeanContol_T3)/MeanContol_T3
+bT60s_x1_r6=(W6r6_A-MeanContol_T3)/MeanContol_T3
+
+T30sx1=c(T30s_x1_r1,T30s_x1_r2,T30s_x1_r3,T30s_x1_r4,T30s_x1_r5,T30s_x1_r6)*100
+T30sx2=c(T30s_x2_r1,T30s_x1_r2,T30s_x2_r3,T30s_x2_r4,T30s_x2_r5,T30s_x2_r6)*100
+T30sx5=c(T30s_x5_r1,T30s_x5_r2,T30s_x5_r3)*100
+T60sx1=c(bT60s_x1_r1,bT60s_x1_r2,bT60s_x1_r3,bT60s_x1_r4,bT60s_x1_r5,bT60s_x1_r6)*100
+T60sx3=c(T60s_x3_r1,T60s_x3_r2,T60s_x3_r3,T60s_x3_r4,T60s_x3_r5,T60s_x3_r6)*100
+T60sx6=c(T60s_x6_r1,T60s_x6_r2,T60s_x6_r3,T60s_x6_r4,T60s_x6_r5,T60s_x6_r6)*100
+T60sx10=c(T60s_x10_r1,T60s_x10_r2,T60s_x10_r3)*100
+T60sx15=c(T60s_x15_r1,T60s_x15_r2,T60s_x15_r3)*100
+
+All=data.frame(T30sx1,T30sx2,T60sx1,T30sx5,T60sx3,T60sx6,T60sx10,T60sx15)
+
+par(mar = c(5, 5, 2, 2)) # make the plots be closer together
+par(mgp=c(3,1.25,0))
+boxplot(All,ylab="% of living bacteria extracted with sonication",
+        xlab="Sonication treatments",
+        names=c("30 seconds\nx1 time","30 seconds\nx2 times","60 seconds\nx1 times",
+                 "30 seconds\nx5 time","60 seconds\nx3 times","60 seconds\nx6 times",
+                 "60 seconds\nx10 times","60 seconds\nx15 times"), col="white",cex.axis=0.765)
+  stripchart(All, vertical = TRUE, 
+           add = TRUE, pch = 20, col = 'black',cex=1.5)
+abline(h=0,lty=2,col="grey")
+text(2,95,paste("Mean =", format(mean(T30sx2), digits = 3)),cex=0.8)
+text(3,66,paste("Mean =", format(mean(T60sx1), digits = 3)),cex=0.8)
+dev.off() 
+```
