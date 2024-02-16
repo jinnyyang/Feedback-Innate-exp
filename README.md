@@ -2,8 +2,7 @@
 #### Authors: Jinny W. Yang and Vincent J. Denef
 
 ---
-This is the repository for the manuscript "Dissecting host-microbiome interaction effects on phytoplankton microbiome composition and diversity" written by Jinny W. Yang and Vincent J. Denef
-
+This is the repository for Yang, Jinny Wu, and Vincent J. Denef. "Dissecting host‐microbiome interaction effects on phytoplankton microbiome composition and diversity." Environmental Microbiology 26, no. 2 (2024): e16585.
 ---
 
 #### Information about this repository:
